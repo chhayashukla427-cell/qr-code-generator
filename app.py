@@ -2,6 +2,17 @@ import streamlit as st
 import qrcode
 from io import BytesIO
 from datetime import datetime
+from urllib.parse import quote
+
+
+def escape_wifi_value(value: str) -> str:
+    return (
+        value.replace("\\", "\\\\")
+        .replace(";", "\\;")
+        .replace(",", "\\,")
+        .replace(":", "\\:")
+        .replace('"', '\\"')
+    )
 
 # -----------------------------
 # Page Configuration
@@ -35,20 +46,6 @@ st.markdown("""
         margin-bottom: 30px;
     }
 
-    .qr-box {
-        padding: 25px;
-        border-radius: 15px;
-        text-align: center;
-        border: 1px solid #ddd;
-        margin-top: 20px;
-    }
-
-    .info-box {
-        padding: 15px;
-        border-radius: 10px;
-        background-color: #f5f5f5;
-        margin-top: 20px;
-    }
 </style>
 """, unsafe_allow_html=True)
 
@@ -73,6 +70,12 @@ if "qr_image" not in st.session_state:
 
 if "qr_data" not in st.session_state:
     st.session_state.qr_data = ""
+
+if "generated_at" not in st.session_state:
+    st.session_state.generated_at = None
+
+if "generated_type" not in st.session_state:
+    st.session_state.generated_type = ""
 
 # -----------------------------
 # Input Section
@@ -123,11 +126,14 @@ elif input_type == "Email":
     )
 
     if email:
-        user_input = (
-            f"mailto:{email}"
-            f"?subject={subject}"
-            f"&body={message}"
-        )
+        user_input = f"mailto:{quote(email, safe='@.+-_')}"
+        query = []
+        if subject:
+            query.append(f"subject={quote(subject, safe='')}")
+        if message:
+            query.append(f"body={quote(message, safe='')}")
+        if query:
+            user_input += "?" + "&".join(query)
     else:
         user_input = ""
 
@@ -159,8 +165,8 @@ elif input_type == "Wi-Fi":
     if wifi_name:
         user_input = (
             f"WIFI:T:{security};"
-            f"S:{wifi_name};"
-            f"P:{wifi_password};;"
+            f"S:{escape_wifi_value(wifi_name)};"
+            f"P:{escape_wifi_value(wifi_password)};;"
         )
     else:
         user_input = ""
@@ -188,6 +194,8 @@ with col2:
 if clear:
     st.session_state.qr_image = None
     st.session_state.qr_data = ""
+    st.session_state.generated_at = None
+    st.session_state.generated_type = ""
     st.rerun()
 
 # -----------------------------
@@ -225,28 +233,16 @@ if generate:
 
         st.session_state.qr_image = buffer.getvalue()
         st.session_state.qr_data = user_input
+        st.session_state.generated_at = datetime.now()
+        st.session_state.generated_type = input_type
 
 # -----------------------------
 # Display QR Code
 # -----------------------------
 if st.session_state.qr_image:
-
-    st.markdown(
-        '<div class="qr-box">',
-        unsafe_allow_html=True
-    )
-
-    st.subheader("Your QR Code")
-
-    st.image(
-        st.session_state.qr_image,
-        width=300
-    )
-
-    st.markdown(
-        '</div>',
-        unsafe_allow_html=True
-    )
+    with st.container(border=True):
+        st.subheader("Your QR Code")
+        st.image(st.session_state.qr_image, width=300)
 
     # -----------------------------
     # Download
@@ -268,25 +264,13 @@ if st.session_state.qr_image:
     # -----------------------------
     # Information
     # -----------------------------
-    st.markdown(
-        '<div class="info-box">',
-        unsafe_allow_html=True
-    )
-
-    st.write("QR Code successfully generated!")
-
-    st.write(
-        f"Type: **{input_type}**"
-    )
-
-    st.write(
-        f"Generated: **{datetime.now().strftime('%d-%m-%Y %I:%M %p')}**"
-    )
-
-    st.markdown(
-        '</div>',
-        unsafe_allow_html=True
-    )
+    with st.container(border=True):
+        st.write("QR Code successfully generated!")
+        st.write(f"Type: **{st.session_state.generated_type}**")
+        st.write(
+            "Generated: **"
+            f"{st.session_state.generated_at.strftime('%d-%m-%Y %I:%M %p')}**"
+        )
 
 # -----------------------------
 # Footer
